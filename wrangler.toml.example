@@ -1,0 +1,62 @@
+# ============================================================
+# Cloudflare Worker configuration for the Kroger MCP server
+# Run: wrangler deploy   (or: wrangler dev for local testing)
+#
+# Setup:
+#   cp wrangler.toml.example wrangler.toml
+#   Then fill in the values below.
+# ============================================================
+
+name            = "mcp-kroger"
+main            = "src/index.ts"
+compatibility_date  = "2025-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ---------------------------------------------------------------------------
+# Durable Objects — McpAgent needs a Durable Object to hold per-session state.
+# Think of this like a tiny stateful process that lives for the life of one
+# Claude session. Workers are normally stateless; Durable Objects give us state.
+# ---------------------------------------------------------------------------
+[[durable_objects.bindings]]
+name       = "MCP_OBJECT"          # Name used in code: env.MCP_OBJECT
+class_name = "KrogerMcpServer"     # Must match the exported class name in src/index.ts
+
+[[migrations]]
+tag         = "v1"
+new_classes = ["KrogerMcpServer"]
+
+# ---------------------------------------------------------------------------
+# KV Namespaces — persistent key-value storage.
+# Two KV stores:
+#   TOKEN_STORE: holds provider user OAuth tokens (for Kroger cart access today)
+#   OAUTH_KV:    used internally by workers-oauth-provider to track OAuth state
+#
+# After running `wrangler kv namespace create TOKEN_STORE` and
+# `wrangler kv namespace create OAUTH_KV`, paste the returned IDs below.
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "TOKEN_STORE"
+id      = "YOUR_TOKEN_STORE_KV_ID"
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id      = "YOUR_OAUTH_KV_ID"
+
+# ---------------------------------------------------------------------------
+# Plain (non-secret) variables — safe to commit to git.
+# ---------------------------------------------------------------------------
+[vars]
+KROGER_STORE_ID           = "REPLACE_WITH_YOUR_KROGER_STORE_ID"
+ALLOWED_GITHUB_USERNAME   = "REPLACE_WITH_YOUR_GITHUB_USERNAME"
+PUBLIC_BASE_URL           = "https://mcp-kroger.REPLACE_WITH_YOUR_ACCOUNT.workers.dev"
+
+# ---------------------------------------------------------------------------
+# Secrets — stored encrypted in Cloudflare, never in this file.
+# Set each one with:
+#   wrangler secret put KROGER_CLIENT_ID
+#   wrangler secret put KROGER_CLIENT_SECRET
+#   wrangler secret put GITHUB_CLIENT_ID
+#   wrangler secret put GITHUB_CLIENT_SECRET
+#   wrangler secret put COOKIE_SECRET       (run: openssl rand -hex 32)
+# ---------------------------------------------------------------------------
+# (secrets are configured via CLI, not listed here)

@@ -1,9 +1,20 @@
-# macOS
-.DS_Store
+# TOML file
+wrangler.toml    
 
-# Node
+# Dependencies
 node_modules/
 
-# Wrangler / Cloudflare
+# Build output
+dist/
+.output/
+
+# Wrangler
 .wrangler/
-wrangler.toml
+
+# Environment variables
+.env
+.env.local
+.dev.vars
+
+# Editor
+.DS_Store
