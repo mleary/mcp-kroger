@@ -1,0 +1,20 @@
+# TOML file
+wrangler.toml    
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.output/
+
+# Wrangler
+.wrangler/
+
+# Environment variables
+.env
+.env.local
+.dev.vars
+
+# Editor
+.DS_Store
