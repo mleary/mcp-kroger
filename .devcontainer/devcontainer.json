@@ -1,0 +1,16 @@
+{
+  "name": "mcp-kroger",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+  },
+  // Shared by every dev container, so you log in to Claude Code once.
+  "mounts": ["source=claude-code-config,target=/home/node/.claude,type=volume"],
+  // 1. Upgrade to npm 11 so .npmrc's min-release-age works (the image ships
+  //    npm 10); --before applies the same 7-day cooldown to npm itself.
+  // 2. A new volume is owned by root, so hand it to `node`, then copy in the
+  //    Claude Code config from .devcontainer/claude (overwrites on rebuild).
+  "postCreateCommand": "sudo npm install -g npm@11 --before=$(date -u -d '7 days ago' +%F) && sudo chown node:node /home/node/.claude && cp -R .devcontainer/claude/. /home/node/.claude/ && npm ci",
+  // 8976: `wrangler login` browser callback. 8787: `wrangler dev`.
+  "forwardPorts": [8976, 8787]
+}

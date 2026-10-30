@@ -1,4 +1,5 @@
 import { htmlResponse } from "./html-response";
+import { KROGER_DEFAULT_HEADERS } from "./kroger-client";
 import {
   consumeKrogerAuthLink,
   hasKrogerAuthLink,
@@ -80,6 +81,7 @@ export async function handleKrogerCallback(
   const tokenResponse = await fetch(KROGER_TOKEN_URL, {
     method: "POST",
     headers: {
+      ...KROGER_DEFAULT_HEADERS,
       "Content-Type": "application/x-www-form-urlencoded",
       Authorization: `Basic ${credentials}`,
     },
