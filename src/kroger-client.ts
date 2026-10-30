@@ -22,6 +22,16 @@ import { LEGACY_KROGER_USER_TOKEN_KEY, krogerUserTokenKey } from "./security";
 const KROGER_API_BASE = "https://api.kroger.com/v1";
 const KROGER_TOKEN_URL = `${KROGER_API_BASE}/connect/oauth2/token`;
 
+/**
+ * Sent on every Kroger request. Kroger's API sits behind Akamai, which has
+ * returned 403 "Access Denied" to this Worker's requests; identifying the
+ * client explicitly rules out a missing User-Agent as the cause.
+ */
+export const KROGER_DEFAULT_HEADERS = {
+  "User-Agent": "mcp-kroger/1.0 (+https://github.com/mleary/mcp-kroger)",
+  Accept: "application/json",
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // KrogerClient class
 //
@@ -61,6 +71,7 @@ export class KrogerClient {
     const response = await fetch(KROGER_TOKEN_URL, {
       method: "POST",
       headers: {
+        ...KROGER_DEFAULT_HEADERS,
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: this.basicAuthHeader(),
       },
@@ -101,6 +112,7 @@ export class KrogerClient {
     const response = await fetch(KROGER_TOKEN_URL, {
       method: "POST",
       headers: {
+        ...KROGER_DEFAULT_HEADERS,
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: this.basicAuthHeader(),
       },
@@ -176,7 +188,7 @@ export class KrogerClient {
     });
 
     const response = await fetch(`${KROGER_API_BASE}/products?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...KROGER_DEFAULT_HEADERS, Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) {
@@ -217,6 +229,7 @@ export class KrogerClient {
     const response = await fetch(`${KROGER_API_BASE}/cart/add`, {
       method: "PUT",
       headers: {
+        ...KROGER_DEFAULT_HEADERS,
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
