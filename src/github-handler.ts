@@ -18,6 +18,7 @@
 import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import type { Env } from "./types";
 import { createGithubAuthState, consumeGithubAuthState } from "./security";
+import { logSecurityEvent } from "./security-log";
 
 // GitHub API/OAuth endpoints — these never change
 const GITHUB_OAUTH_URL = "https://github.com/login/oauth/authorize";
@@ -71,6 +72,7 @@ export async function handleCallback(
   const state = url.searchParams.get("state");
 
   if (!code || !state) {
+    logSecurityEvent("github_callback_invalid", request, { reason: "missing_code_or_state" });
     return new Response("Missing code or state parameter from GitHub", { status: 400 });
   }
 
@@ -114,6 +116,10 @@ export async function handleCallback(
 
   // ── Enforce the allowlist — only YOUR GitHub account gets in ──────────────
   if (user.login.toLowerCase() !== env.ALLOWED_GITHUB_USERNAME.toLowerCase()) {
+    logSecurityEvent("github_login_denied", request, {
+      githubLogin: user.login,
+      githubUserId: user.id,
+    });
     return new Response(
       `Access denied. GitHub user "${user.login}" is not authorized for this MCP server.`,
       { status: 403 }
@@ -123,6 +129,10 @@ export async function handleCallback(
   // ── Recover the original OAuth authorization request from state ───────────
   const authRequest = await consumeGithubAuthState<AuthRequest>(env.OAUTH_KV, state);
   if (!authRequest) {
+    logSecurityEvent("github_callback_invalid", request, {
+      reason: "invalid_or_expired_state",
+      githubLogin: user.login,
+    });
     return new Response("Invalid or expired state parameter", { status: 400 });
   }
 
@@ -144,6 +154,11 @@ export async function handleCallback(
     props: {
       githubLogin: user.login,
     },
+  });
+
+  logSecurityEvent("github_login_success", request, {
+    githubLogin: user.login,
+    clientId: authRequest.clientId,
   });
 
   return Response.redirect(redirectTo, 302);

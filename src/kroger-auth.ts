@@ -4,6 +4,7 @@ import {
   hasKrogerAuthLink,
   krogerUserTokenKey,
 } from "./security";
+import { logSecurityEvent } from "./security-log";
 import type { Env, KrogerTokenResponse, StoredKrogerToken } from "./types";
 
 const KROGER_TOKEN_URL = "https://api.kroger.com/v1/connect/oauth2/token";
@@ -20,6 +21,7 @@ export async function handleKrogerAuthStart(
   const authToken = url.searchParams.get("token");
 
   if (!authToken) {
+    logSecurityEvent("kroger_link_invalid", request, { reason: "missing_token" });
     return htmlResponse(
       "Kroger cart authorization links are private. Use reauthenticate_tool in Claude to generate a fresh link.",
       403
@@ -28,6 +30,7 @@ export async function handleKrogerAuthStart(
 
   const isAuthorizedLink = await hasKrogerAuthLink(env.OAUTH_KV, authToken);
   if (!isAuthorizedLink) {
+    logSecurityEvent("kroger_link_invalid", request, { reason: "invalid_or_expired_token" });
     return htmlResponse(
       "This Kroger authorization link is invalid or expired. Generate a new one from Claude.",
       403
@@ -65,11 +68,13 @@ export async function handleKrogerCallback(
     return htmlResponse(`Kroger authorization was denied: ${error}`, 400);
   }
   if (!state) {
+    logSecurityEvent("kroger_link_invalid", request, { reason: "callback_missing_state" });
     return htmlResponse("Missing Kroger authorization state.", 400);
   }
 
   const authLinkState = await consumeKrogerAuthLink(env.OAUTH_KV, state);
   if (!authLinkState) {
+    logSecurityEvent("kroger_link_invalid", request, { reason: "callback_invalid_state" });
     return htmlResponse("Invalid or expired Kroger authorization state.", 400);
   }
   if (!code) {
