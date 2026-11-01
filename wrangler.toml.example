@@ -13,6 +13,15 @@ compatibility_date  = "2025-11-01"
 compatibility_flags = ["nodejs_compat"]
 
 # ---------------------------------------------------------------------------
+# Workers Logs — persists console output so security events (src/security-log.ts)
+# are searchable in the dashboard: Workers → mcp-kroger → Logs.
+# Filter on type = "security", or event = "github_login_denied".
+# ---------------------------------------------------------------------------
+[observability]
+enabled            = true
+head_sampling_rate = 1   # keep every request; traffic here is tiny
+
+# ---------------------------------------------------------------------------
 # Durable Objects — McpAgent needs a Durable Object to hold per-session state.
 # Think of this like a tiny stateful process that lives for the life of one
 # Claude session. Workers are normally stateless; Durable Objects give us state.

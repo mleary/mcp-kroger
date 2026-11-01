@@ -2,6 +2,7 @@ import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { handleAuthorize, handleCallback } from "./github-handler";
 import { htmlResponse } from "./html-response";
 import { handleKrogerAuthStart, handleKrogerCallback } from "./kroger-auth";
+import { logSecurityEvent } from "./security-log";
 import type { Env } from "./types";
 
 type OAuthHelpersResolver = (env: Env) => OAuthHelpers;
@@ -18,6 +19,10 @@ export function createDefaultHandler(resolveOAuthHelpers: OAuthHelpersResolver) 
       if (pathname === "/auth/kroger") return handleKrogerAuthStart(request, env);
       if (pathname === "/auth/kroger/callback") {
         return handleKrogerCallback(request, env);
+      }
+
+      if (pathname !== "/" && pathname !== "/favicon.ico") {
+        logSecurityEvent("unknown_path", request);
       }
 
       return htmlResponse(
