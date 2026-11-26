@@ -1,12 +1,8 @@
 import { htmlResponse } from "./html-response";
-import { KROGER_DEFAULT_HEADERS } from "./kroger-client";
-import {
-  consumeKrogerAuthLink,
-  hasKrogerAuthLink,
-  krogerUserTokenKey,
-} from "./security";
+import { KROGER_DEFAULT_HEADERS, storeKrogerUserToken } from "./kroger-client";
+import { consumeKrogerAuthLink, hasKrogerAuthLink } from "./security";
 import { logSecurityEvent } from "./security-log";
-import type { Env, KrogerTokenResponse, StoredKrogerToken } from "./types";
+import type { Env, KrogerTokenResponse } from "./types";
 
 const KROGER_TOKEN_URL = "https://api.kroger.com/v1/connect/oauth2/token";
 
@@ -103,18 +99,14 @@ export async function handleKrogerCallback(
   }
 
   const tokenData = (await tokenResponse.json()) as KrogerTokenResponse;
-  const storedToken: StoredKrogerToken = { ...tokenData, stored_at: Date.now() };
-
-  await env.TOKEN_STORE.put(
-    krogerUserTokenKey(authLinkState.accountId),
-    JSON.stringify(storedToken),
-    { expirationTtl: 86400 }
-  );
+  await storeKrogerUserToken(env, authLinkState.accountId, tokenData);
 
   const expiryMinutes = Math.round((tokenData.expires_in ?? 1800) / 60);
   return htmlResponse(
     `Kroger authorization successful.\n` +
-      `Token expires in ${expiryMinutes} minutes and will auto-refresh if Kroger returned a refresh token.\n\n` +
+      (tokenData.refresh_token
+        ? `Access renews automatically, so you shouldn't need to do this again unless Kroger revokes it.\n\n`
+        : `Kroger didn't return a refresh token, so access ends in ${expiryMinutes} minutes.\n\n`) +
       `You can close this window and return to Claude.`,
     200
   );

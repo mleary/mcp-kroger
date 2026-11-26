@@ -34,12 +34,17 @@ export interface Env {
 
   // ── Cookie secret — random 32-byte hex string used to sign session cookies
   COOKIE_SECRET: string;
+  // Optional. Only needed when the Worker is reached through a custom domain you
+  // want links to use; otherwise links use the host the MCP client connected to.
   PUBLIC_BASE_URL?: string; // e.g. "https://mcp-kroger.<account>.workers.dev"
 }
 
 export interface AuthenticatedUserProps extends Record<string, unknown> {
   githubLogin: string;
   displayName?: string;
+  // Origin the MCP client connected to (e.g. "https://mcp-kroger.<account>.workers.dev").
+  // Added per request in src/index.ts, not stored in the OAuth grant.
+  requestOrigin?: string;
 }
 
 export interface KrogerAuthLinkState {

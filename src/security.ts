@@ -89,13 +89,37 @@ export async function consumeKrogerAuthLink(
   return state;
 }
 
-export function getPublicBaseUrl(env: { PUBLIC_BASE_URL?: string }): string {
-  const configured = env.PUBLIC_BASE_URL?.trim();
-  if (configured) {
-    return configured.replace(/\/+$/, "");
-  }
+// Values copied verbatim from wrangler.toml.example look like real URLs but
+// point nowhere, so treat them the same as "not configured".
+function isPlaceholder(value: string): boolean {
+  return /REPLACE_WITH|YOUR_[A-Z_]+/.test(value);
+}
 
-  return "https://mcp-kroger.REPLACE_WITH_YOUR_ACCOUNT.workers.dev";
+function normalizeBaseUrl(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed || isPlaceholder(trimmed)) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The public origin of this Worker, used to build links we hand back to the user.
+ *
+ * Prefers PUBLIC_BASE_URL (for a custom domain), and otherwise falls back to the
+ * origin the MCP client actually connected to. Returns null only if neither is
+ * usable, so callers never emit a link with a placeholder host.
+ */
+export function getPublicBaseUrl(
+  env: { PUBLIC_BASE_URL?: string },
+  requestOrigin?: string
+): string | null {
+  return normalizeBaseUrl(env.PUBLIC_BASE_URL) ?? normalizeBaseUrl(requestOrigin);
 }
 
 export function escapeHtml(value: string): string {

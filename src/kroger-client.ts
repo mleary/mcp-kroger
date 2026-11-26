@@ -32,6 +32,32 @@ export const KROGER_DEFAULT_HEADERS = {
   Accept: "application/json",
 };
 
+/**
+ * How long a stored Kroger user token stays in KV without being used.
+ *
+ * The access token inside it only lasts ~30 minutes, but the refresh token lasts
+ * far longer, and losing it is what forces a full browser re-auth. So the KV entry
+ * must outlive the access token by a wide margin. Every refresh rewrites the entry
+ * and resets this clock; Kroger remains the authority on when the refresh token
+ * itself stops working.
+ */
+const KROGER_USER_TOKEN_KV_TTL_SECONDS = 180 * 24 * 60 * 60; // 180 days
+
+const REAUTH_HINT = "Use reauthenticate_tool in Claude to get a fresh Kroger authorization link.";
+
+/** Persist a Kroger user token for an MCP account. */
+export async function storeKrogerUserToken(
+  env: Pick<Env, "TOKEN_STORE">,
+  accountId: string,
+  token: KrogerTokenResponse
+): Promise<StoredKrogerToken> {
+  const stored: StoredKrogerToken = { ...token, stored_at: Date.now() };
+  await env.TOKEN_STORE.put(krogerUserTokenKey(accountId), JSON.stringify(stored), {
+    expirationTtl: KROGER_USER_TOKEN_KV_TTL_SECONDS,
+  });
+  return stored;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // KrogerClient class
 //
@@ -104,7 +130,7 @@ export class KrogerClient {
   }
 
   /**
-   * Try to refresh the user token using the refresh_token grant.
+   * Refresh the user token using the refresh_token grant.
    * Kroger user tokens expire in 30 minutes; refresh tokens last much longer.
    * Returns the new access token, or throws if refresh fails.
    */
@@ -124,18 +150,19 @@ export class KrogerClient {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Kroger token refresh failed (${response.status}): ${body}`);
+      throw new Error(
+        `Kroger token refresh failed (${response.status}): ${body}. ${REAUTH_HINT}`
+      );
     }
 
     const data = (await response.json()) as KrogerTokenResponse;
 
-    // Persist the refreshed token back to KV
-    const updated: StoredKrogerToken = { ...data, stored_at: Date.now() };
-    await this.env.TOKEN_STORE.put(
-      this.userTokenKey(),
-      JSON.stringify(updated),
-      { expirationTtl: 86400 } // keep in KV for 24h; Kroger will reject it earlier
-    );
+    // If Kroger rotates the refresh token, store the new one. If it doesn't send
+    // one back, keep the one we just used, or the next refresh has nothing to use.
+    await storeKrogerUserToken(this.env, this.accountId, {
+      ...data,
+      refresh_token: data.refresh_token ?? refreshToken,
+    });
 
     return data.access_token;
   }
@@ -147,10 +174,7 @@ export class KrogerClient {
   async getValidUserToken(): Promise<string> {
     const stored = await this.getUserToken();
     if (!stored) {
-      throw new Error(
-        "No Kroger user token found. " +
-          "Visit /auth/kroger in a browser to authorize cart access."
-      );
+      throw new Error(`No Kroger user token found. ${REAUTH_HINT}`);
     }
 
     // Check if token is about to expire (within 5 minutes)
@@ -164,8 +188,7 @@ export class KrogerClient {
 
     if (isExpiringSoon) {
       throw new Error(
-        "Kroger user token has expired and no refresh token is available. " +
-          "Visit /auth/kroger to re-authorize."
+        `Kroger user token has expired and no refresh token is available. ${REAUTH_HINT}`
       );
     }
 
@@ -224,23 +247,34 @@ export class KrogerClient {
     quantity: number,
     modality: "PICKUP" | "DELIVERY"
   ): Promise<{ status: string; upc: string; quantity: number; modality: string }> {
-    const token = await this.getValidUserToken();
+    const putCart = (token: string) =>
+      fetch(`${KROGER_API_BASE}/cart/add`, {
+        method: "PUT",
+        headers: {
+          ...KROGER_DEFAULT_HEADERS,
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: [{ upc, quantity, modality }],
+        }),
+      });
 
-    const response = await fetch(`${KROGER_API_BASE}/cart/add`, {
-      method: "PUT",
-      headers: {
-        ...KROGER_DEFAULT_HEADERS,
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        items: [{ upc, quantity, modality }],
-      }),
-    });
+    let response = await putCart(await this.getValidUserToken());
+
+    // Kroger can reject an access token before our clock says it has expired
+    // (e.g. it was revoked or replaced). Refresh once and retry before giving up.
+    if (response.status === 401) {
+      const stored = await this.getUserToken();
+      if (stored?.refresh_token) {
+        response = await putCart(await this.refreshUserToken(stored.refresh_token));
+      }
+    }
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Kroger add-to-cart failed (${response.status}): ${body}`);
+      const hint = response.status === 401 ? ` ${REAUTH_HINT}` : "";
+      throw new Error(`Kroger add-to-cart failed (${response.status}): ${body}${hint}`);
     }
 
     return { status: "success", upc, quantity, modality };
