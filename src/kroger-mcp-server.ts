@@ -94,24 +94,34 @@ export class KrogerMcpServer extends McpAgent<Env, unknown, AuthenticatedUserPro
         "Click the returned URL in a browser to re-authorize, then retry add_to_cart_tool.",
       {},
       async () => {
+        const publicBaseUrl = getPublicBaseUrl(this.env, this.props?.requestOrigin);
+        if (!publicBaseUrl) {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  "Couldn't work out this server's public URL. Set PUBLIC_BASE_URL to the " +
+                  "deployed Worker URL (e.g. https://mcp-kroger.<account>.workers.dev) and redeploy.",
+              },
+            ],
+          };
+        }
+
         const accountId = resolveAuthenticatedAccountId(this.env, this.props);
         const authToken = await createKrogerAuthLink(this.env.OAUTH_KV, accountId);
-        const publicBaseUrl = getPublicBaseUrl(this.env);
         const authUrl = new URL("/auth/kroger", publicBaseUrl);
         authUrl.searchParams.set("token", authToken);
-        const isConfigured = !publicBaseUrl.includes("REPLACE_WITH_YOUR_ACCOUNT");
 
         return {
           content: [
             {
               type: "text",
-              text: isConfigured
-                ? `To re-authorize Kroger cart access, open this URL in your browser:\n\n` +
-                  `  ${authUrl.toString()}\n\n` +
-                  `After you approve access, return to Claude and retry add_to_cart_tool.`
-                : `Set PUBLIC_BASE_URL in wrangler.toml to your deployed Worker URL, then open this path on that host:\n\n` +
-                  `  /auth/kroger?token=${authToken}\n\n` +
-                  `After you approve access, return to Claude and retry add_to_cart_tool.`,
+              text:
+                `To re-authorize Kroger cart access, open this URL in your browser:\n\n` +
+                `  ${authUrl.toString()}\n\n` +
+                `The link works once and expires in 10 minutes. ` +
+                `After you approve access, return to Claude and retry add_to_cart_tool.`,
             },
           ],
         };

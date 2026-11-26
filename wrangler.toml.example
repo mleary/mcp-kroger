@@ -57,6 +57,8 @@ id      = "YOUR_OAUTH_KV_ID"
 [vars]
 KROGER_STORE_ID           = "REPLACE_WITH_YOUR_KROGER_STORE_ID"
 ALLOWED_GITHUB_USERNAME   = "REPLACE_WITH_YOUR_GITHUB_USERNAME"
+# Optional: links (e.g. from reauthenticate_tool) default to the host Claude connects to.
+# Set this only to force a different host, such as a custom domain.
 PUBLIC_BASE_URL           = "https://mcp-kroger.REPLACE_WITH_YOUR_ACCOUNT.workers.dev"
 
 # ---------------------------------------------------------------------------

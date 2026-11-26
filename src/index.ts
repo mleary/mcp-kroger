@@ -9,13 +9,28 @@ export { KrogerMcpServer };
 
 let providerOptions: OAuthProviderOptions<Env>;
 
+const mcpHandler = KrogerMcpServer.serve("/mcp");
+
+// Pass the origin the client connected to into the MCP agent's props, so tools
+// can build links back to this Worker without depending on PUBLIC_BASE_URL.
+const apiHandler = {
+  fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const ctxWithProps = ctx as ExecutionContext & { props?: Record<string, unknown> };
+    ctxWithProps.props = {
+      ...(ctxWithProps.props ?? {}),
+      requestOrigin: new URL(request.url).origin,
+    };
+    return mcpHandler.fetch(request, env, ctx);
+  },
+};
+
 const defaultHandler = createDefaultHandler((env) =>
   getOAuthApi(providerOptions, env)
 );
 
 providerOptions = {
   apiRoute: "/mcp",
-  apiHandler: KrogerMcpServer.serve("/mcp"),
+  apiHandler,
   defaultHandler,
   authorizeEndpoint: "/authorize",
   tokenEndpoint: "/token",
